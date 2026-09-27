@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Snek</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            background-color: #111;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+        }
+
+        /* --- GAME STYLES --- */
+        #game-container {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .instructions {
+            color: #4caf50;
+            margin-bottom: 15px;
+            font-family: monospace;
+            font-size: 1.2rem;
+            letter-spacing: 1px;
+        }
+
+        canvas {
+            background-color: #000;
+            border: 4px solid #333;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.8);
+            border-radius: 5px;
+        }
+
+        /* --- SURPRISE LETTER STYLES --- */
+        #letter-container {
+            display: none; 
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-image: url('withu.gif'); 
+            background-size: cover;
+            background-position: center;
+            z-index: 100;
+            justify-content: center;
+            align-items: center;
+            opacity: 0;
+            transition: opacity 2.5s ease-in-out;
+        }
+
+        .letter-box {
+            background: rgba(0, 0, 0, 0.65);
+            padding: 50px 40px;
+            border-radius: 20px;
+            max-width: 600px;
+            width: 85%;
+            text-align: center;
+            color: #fdfdfd;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.6);
+            backdrop-filter: blur(4px); 
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            line-height: 1.8;
+            font-size: 1.25rem;
+            font-style: italic;
+        }
+
+        @media (max-width: 600px) {
+            canvas { width: 320px; height: 320px; }
+            .letter-box { font-size: 1.1rem; padding: 30px 20px; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- BGM Audio Element -->
+    <audio id="bgm" src="glow.mp3" loop></audio>
+
+    <!-- The Snek Game -->
+    <div id="game-container">
+        <div class="instructions">Use Arrow Keys or Swipe to play Snek</div>
+        <canvas id="gameCanvas" width="400" height="400"></canvas>
+    </div>
+
+    <!-- The Secret Letter Reveal -->
+    <div id="letter-container">
+        <div class="letter-box">
+            "When this life comes to an end and God asks me what I wish to be in my next life, I will tell Him without hesitation that I want to be your man all over again. A life without you in it isn’t a life worth living, and if I’m given an eternity of choices, I will choose you every single time."
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Game variables
+        const gridSize = 20;
+        let snake = [{x: 10, y: 10}];
+        let dx = 0;
+        let dy = 0;
+        let score = 0;
+        let isHeartSpawned = false;
+        
+        let food = {
+            x: Math.floor(Math.random() * (canvas.width / gridSize)),
+            y: Math.floor(Math.random() * (canvas.height / gridSize))
+        };
+        
+        let gameLoopTimeout;
+        let gameActive = true;
+
+        // Start game loop
+        main();
+
+        function main() {
+            if (!gameActive) return;
+
+            gameLoopTimeout = setTimeout(function onTick() {
+                clearCanvas();
+                drawFood();
+                advanceSnake();
+                drawSnake();
+                drawScore();
+                
+                // If game over (hit wall or self), restart silently to keep the disguise
+                if (checkGameOver()) {
+                    resetGame();
+                }
+
+                main();
+            }, 120); 
+        }
+
+        function clearCanvas() {
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        function drawSnake() {
+            ctx.fillStyle = '#4caf50'; 
+            ctx.strokeStyle = '#000';
+            
+            snake.forEach(part => {
+                ctx.fillRect(part.x * gridSize, part.y * gridSize, gridSize, gridSize);
+                ctx.strokeRect(part.x * gridSize, part.y * gridSize, gridSize, gridSize);
+            });
+        }
+
+        function advanceSnake() {
+            if (dx === 0 && dy === 0) return;
+
+            const head = {x: snake[0].x + dx, y: snake[0].y + dy};
+            snake.unshift(head);
+
+            // Check if snake eats the food
+            if (head.x === food.x && head.y === food.y) {
+                if (isHeartSpawned) {
+                    // THE TRIGGER: She ate the heart!
+                    gameActive = false; 
+                    triggerSurprise();
+                    return; 
+                } else {
+                    // Ate normal food
+                    score++;
+                    spawnFood();
+                }
+            } else {
+                snake.pop(); // Remove tail if no food eaten
+            }
+        }
+
+        function spawnFood() {
+            food = {
+                x: Math.floor(Math.random() * (canvas.width / gridSize)),
+                y: Math.floor(Math.random() * (canvas.height / gridSize))
+            };
+            
+            // Once score reaches 5, the next "food" spawned is the heart
+            if (score >= 5) {
+                isHeartSpawned = true;
+            }
+        }
+
+        function drawFood() {
+            if (isHeartSpawned) {
+                // Draw the heart trigger
+                ctx.font = "18px Arial";
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillText("❤️", food.x * gridSize + (gridSize/2), food.y * gridSize + (gridSize/2));
+            } else {
+                // Draw normal red square food
+                ctx.fillStyle = 'red';
+                ctx.fillRect(food.x * gridSize, food.y * gridSize, gridSize, gridSize);
+            }
+        }
+
+        function drawScore() {
+            ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
+            ctx.font = "16px monospace";
+            ctx.textAlign = "left";
+            ctx.textBaseline = "top";
+            ctx.fillText("Score: " + score, 10, 10);
+        }
+
+        function checkGameOver() {
+            const hitLeftWall = snake[0].x < 0;
+            const hitRightWall = snake[0].x >= canvas.width / gridSize;
+            const hitTopWall = snake[0].y < 0;
+            const hitBottomWall = snake[0].y >= canvas.height / gridSize;
+
+            let hitSelf = false;
+            for (let i = 4; i < snake.length; i++) {
+                if (snake[i].x === snake[0].x && snake[i].y === snake[0].y) {
+                    hitSelf = true;
+                }
+            }
+            return hitLeftWall || hitRightWall || hitTopWall || hitBottomWall || hitSelf;
+        }
+
+        function resetGame() {
+            snake = [{x: 10, y: 10}];
+            dx = 0;
+            dy = 0;
+            score = 0;
+            isHeartSpawned = false;
+            spawnFood();
+        }
+
+        // --- SURPRISE TRIGGER FUNCTION ---
+        function triggerSurprise() {
+            const gameContainer = document.getElementById('game-container');
+            const letterContainer = document.getElementById('letter-container');
+            const bgm = document.getElementById('bgm');
+
+            gameContainer.style.display = 'none';
+
+            bgm.volume = 0.6;
+            bgm.play().catch(e => console.log("Audio requires interaction first."));
+
+            letterContainer.style.display = 'flex';
+            setTimeout(() => {
+                letterContainer.style.opacity = 1;
+            }, 50);
+        }
+
+        // --- CONTROLS (Keyboard) ---
+        document.addEventListener("keydown", changeDirection);
+        function changeDirection(event) {
+            const LEFT_KEY = 37;
+            const RIGHT_KEY = 39;
+            const UP_KEY = 38;
+            const DOWN_KEY = 40;
+
+            const keyPressed = event.keyCode;
+            const goingUp = dy === -1;
+            const goingDown = dy === 1;
+            const goingRight = dx === 1;
+            const goingLeft = dx === -1;
+
+            if([37, 38, 39, 40].includes(keyPressed)) {
+                event.preventDefault();
+            }
+
+            if (keyPressed === LEFT_KEY && !goingRight) { dx = -1; dy = 0; }
+            if (keyPressed === UP_KEY && !goingDown) { dx = 0; dy = -1; }
+            if (keyPressed === RIGHT_KEY && !goingLeft) { dx = 1; dy = 0; }
+            if (keyPressed === DOWN_KEY && !goingUp) { dx = 0; dy = 1; }
+        }
+
+        // --- CONTROLS (Swipe for Mobile) ---
+        let touchStartX = 0;
+        let touchStartY = 0;
+
+        document.addEventListener('touchstart', function(e) {
+            touchStartX = e.changedTouches[0].screenX;
+            touchStartY = e.changedTouches[0].screenY;
+        }, false);
+
+        document.addEventListener('touchend', function(e) {
+            let touchEndX = e.changedTouches[0].screenX;
+            let touchEndY = e.changedTouches[0].screenY;
+            handleSwipe(touchStartX, touchStartY, touchEndX, touchEndY);
+        }, false);
+
+        function handleSwipe(startX, startY, endX, endY) {
+            const xDiff = endX - startX;
+            const yDiff = endY - startY;
+            
+            if (Math.abs(xDiff) < 30 && Math.abs(yDiff) < 30) return; 
+
+            const goingUp = dy === -1;
+            const goingDown = dy === 1;
+            const goingRight = dx === 1;
+            const goingLeft = dx === -1;
+
+            if (Math.abs(xDiff) > Math.abs(yDiff)) {
+                if (xDiff > 0 && !goingLeft) { dx = 1; dy = 0; }
+                else if (xDiff < 0 && !goingRight) { dx = -1; dy = 0; }
+            } else {
+                if (yDiff > 0 && !goingUp) { dx = 0; dy = 1; }
+                else if (yDiff < 0 && !goingDown) { dx = 0; dy = -1; }
+            }
+        }
+    </script>
+</body>
+</html>
